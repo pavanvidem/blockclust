@@ -254,6 +254,7 @@ target_alias =
 top_build_prefix = ../
 top_builddir = ..
 top_srcdir = ..
+AM_CXXFLAGS = -c -Wall
 BlockClust_SOURCES = BlockClust.cpp BlockGroup.cpp Block.cpp Read.cpp BlockEdge.cpp GspanCreator.cpp FeatureComputer.cpp BlockGroupAnnotator.cpp
 all: all-am
 
