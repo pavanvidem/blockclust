@@ -3,8 +3,11 @@ import os
 import pysam
 import sys
 from collections import defaultdict
-
-rfam_map = "rfam_map.txt"
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import precision_score
+from sklearn.metrics import recall_score
+from sklearn.metrics import f1_score
 
 
 def add_chr(old_annotations, new_annotations):
@@ -238,8 +241,11 @@ def compute_nn_performance(outdir, rna_class, class_target):
         os.makedirs(class_dir)
     write_class_targets(rna_class, class_target, "test", outdir)
 
+    l_true_targets = open(os.path.join(outdir, rna_class, rna_class + ".test.target")).read().splitlines()
+    l_true_targets = list(map(int, l_true_targets))
+    l_pred_targets = []
+    l_pred_values = []
     fh_knn = open(os.path.join(outdir, "knn_target_value"))
-    l_avg_knn = []
     for line in fh_knn:
         f = line.rstrip('\n').rstrip().split()
         s = 0
@@ -248,20 +254,28 @@ def compute_nn_performance(outdir, rna_class, class_target):
                 s += 1
             else:
                 s += -1
-        l_avg_knn.append(s/float(len(f)))
+        l_pred_values.append(s/float(len(f)))
+        if s/float(len(f)) >= 0:
+            l_pred_targets.append(1)
+        else:
+            l_pred_targets.append(-1)
     fh_knn.close()
 
-    fh_target = open(os.path.join(outdir, rna_class, rna_class + ".test.target"))
-    fh_perf = open(os.path.join(outdir, rna_class, rna_class + ".nn.perf.in"), 'w')
-    for i, line in enumerate(fh_target):
-        fh_perf.write(line.rstrip('\n') + '\t' + str(l_avg_knn[i]) + '\n')
-    fh_target.close()
-    fh_perf.close()
+    # use predicted values for auc and targets for remaining measures
+    aucroc = roc_auc_score(l_true_targets, l_pred_values)
+    accuracy = accuracy_score(l_true_targets, l_pred_targets)
+    precision = precision_score(l_true_targets, l_pred_targets)
+    recall = recall_score(l_true_targets, l_pred_targets)
+    fscore = f1_score(l_true_targets, l_pred_targets)
 
-    print(rna_class + ":\n")
-    os.system(" ".join(["perf -PRF -SEN -PPV -NPV -ROC -SPC -ACC -PRE -REC -t 0.5",
-                       "<", os.path.join(outdir, rna_class, rna_class + ".nn.perf.in"), "2>&1 | tee",
-                        os.path.join(outdir, rna_class) + ".nn.out"]))
+    print(rna_class + ":")
+    print('accuracy:    {:06f}'.format(accuracy))
+    print('precision:   {:06f}'.format(precision))
+    print('recall:      {:06f}'.format(recall))
+    print('f1-score:    {:06f}'.format(fscore))
+    print('aucroc:      {:06f}'.format(aucroc))
+    print("")
+    return
 
 
 def collect_model_based_predictions(rna_class, outdir, d_temp_predictions):
@@ -315,21 +329,29 @@ def model_based_predictions(outdir, model_dir, d_rna_class_targets, config_file,
 
 def compute_model_based_performance(outdir, rna_class):
     fh_pred = open(os.path.join(outdir, rna_class, "prediction"))
-    l_test_targets = open(os.path.join(outdir, rna_class, rna_class + ".test.target")).readlines()
-    fh_perf = open(os.path.join(outdir, rna_class, rna_class + ".pred.perf.in"), 'w')
+    l_true_targets = open(os.path.join(outdir, rna_class, rna_class + ".test.target")).read().splitlines()
+    l_true_targets = list(map(int, l_true_targets))
+    l_pred_targets = []
     for c, line in enumerate(fh_pred):
         f = line.rstrip('\n').split()
         if float(f[1]) < 0:
-            fh_perf.write(l_test_targets[c].rstrip('\n') + "\t-1" + '\n')
+            l_pred_targets.append(-1)
         else:
-            fh_perf.write(l_test_targets[c].rstrip('\n') + "\t1" + '\n')
-    fh_pred.close()
-    fh_perf.close()
+            l_pred_targets.append(1)
 
-    print(rna_class + ":\n")
-    os.system(" ".join(["perf -PRF -SEN -PPV -NPV -ROC -SPC -ACC -PRE -REC -t 0.5",
-                        "<", os.path.join(outdir, rna_class, rna_class + ".pred.perf.in"), "2>&1 | tee",
-                        os.path.join(outdir, rna_class) + ".pred.out"]))
+    accuracy = accuracy_score(l_true_targets, l_pred_targets)
+    precision = precision_score(l_true_targets, l_pred_targets)
+    recall = recall_score(l_true_targets, l_pred_targets)
+    fscore = f1_score(l_true_targets, l_pred_targets)
+    aucroc = roc_auc_score(l_true_targets, l_pred_targets)
+
+    print(rna_class + ":")
+    print('accuracy:    {:06f}'.format(accuracy))
+    print('precision:   {:06f}'.format(precision))
+    print('recall:      {:06f}'.format(recall))
+    print('f1-score:    {:06f}'.format(fscore))
+    print('aucroc:      {:06f}'.format(aucroc))
+    print("")
     return
 
 
@@ -367,42 +389,49 @@ def init():
                              "PRE = Preprocessing mode. convert from reads BAM to tags BED."
                              "ANALYSIS = Clustering and/or Classification mode."
                              "POST = Post processing such as plotting and annotation with known Rfam families etc.")
-    parser.add_argument('-a', '--accept', action='store', dest='accept_annotations', required=False,
+    parser.add_argument('-a', '--accept', action='store', dest='accept_annotations',
                         help='Annotations of known ncRNAs in BED format')
-    parser.add_argument('-r', '--reject', action='store', dest='reject_annotations', required=False,
+    parser.add_argument('-r', '--reject', action='store', dest='reject_annotations',
                         help='Annotations of other known transcripts (eg. protein coding) in BED format')
-    parser.add_argument('-t', '--test_input', action='store', dest='test_input', required=False,
+    parser.add_argument('-t', '--test_input', action='store', dest='test_input',
                         help='Output of preprocessing mode as input.')
-    parser.add_argument('-o', '--out', action='store', dest='output_dir', required=False,
+    parser.add_argument('-o', '--out', action='store', dest='output_dir',
                         help='Output directory path for the whole analysis')
-    parser.add_argument('-f', '--config', action='store', dest='config_file', required=False,
-                        help='BlockClust configuration file.')
+    parser.add_argument('-f', '--config', action='store', dest='config_file',
+                        default=os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))),
+                                             'share', 'blockclust_data', 'blockclust.config'),
+                        help='blockClust configuration file.')
     parser.add_argument("-c", '--classify', action='store_true', help="Classify the input blockgroups")
     parser.add_argument("-cm", '--clmode', type=str, choices=["NEAREST", "MODEL"], default='MODEL',
                         dest='classification_mode',
                         help="Type of classification"
                              "MODEL = Model based classification"
                              "NEAREST= Nearest neighbour classification")
-    parser.add_argument('-md', '--model_dir', action='store', dest='model_dir', required=False,
+    parser.add_argument('-md', '--model_dir', action='store', dest='model_dir',
+                        default=os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))),
+                                             'share', 'blockclust_data', 'models'),
                         help='Directory containing trained models for classification')
-    parser.add_argument('-cs', '--cmsearch_out', action='store', dest='cmsearch_out', required=False,
+    parser.add_argument('-cs', '--cmsearch_out', action='store', dest='cmsearch_out',
                         help='Output of cmsearch tool')
-    parser.add_argument('-cbed', '--clust_bed', action='store', dest='clusters_bed', required=False,
+    parser.add_argument('-cbed', '--clust_bed', action='store', dest='clusters_bed',
                         help='BED file containing clusters from ANALYSIS mode')
-    parser.add_argument('-bam', '--bam', action='store', dest='bam', required=False,
+    parser.add_argument('-bam', '--bam', action='store', dest='bam',
                         help='Input bam file')
-    parser.add_argument('-tbed', '--tags_bed', action='store', dest='tags_bed', required=False,
+    parser.add_argument('-tbed', '--tags_bed', action='store', dest='tags_bed',
                         help='BED file of tags')
-    parser.add_argument('-tab', '--sim_tab', action='store', dest='sim_tab', required=False,
+    parser.add_argument('-tab', '--sim_tab', action='store', dest='sim_tab',
                         help='Tabular file of pairwise blockgroup similarities')
     parser.add_argument('-b', '--bit_size', action='store', type=int, default=15, dest='bit_size',
                         help='Bit size')
-    parser.add_argument('-rfam', '--rfam_map', action='store', dest='rfam_map', required=False,
+    parser.add_argument('-rfam', '--rfam_map', action='store', dest='rfam_map',
+                        default=os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))),
+                                             'blockclust_data', 'rfam_map.txt'),
                         help='Mapping of Rfam families')
+
     parser.add_argument("-chr", '--no_chr', action='store_true',
                         help="Input blockgroups do not contain 'chr' in the begining of chromosome ids "
                              "(for eg. Ensembl database do not use 'chr'). ")
-    parser.add_argument('-v', '--version', action='version', version='%(prog)s 1.0')
+    parser.add_argument('-v', '--version', action='version', version='%(prog)s 1.1.0')
 
     args = parser.parse_args()
 
@@ -416,7 +445,7 @@ def init():
         for alignment in fh_bam.fetch():  # until_eof=True also fetches the unmapped reads
             readid = alignment.query_name
             ref_name = alignment.reference_name
-            # TODO: remove chrm restriction
+            # TODO: remove chrM restriction
             if ref_name.startswith('chrM'):
                 continue
             readseq = alignment.get_forward_sequence()
@@ -463,8 +492,8 @@ def init():
             add_chr(args.accept_annotations, accept_annotations)
             add_chr(args.reject_annotations, reject_annotations)
 
-        # BlockClust call
-        os.system(' '.join(["BlockClust",
+        # blockClust call
+        os.system(' '.join(["blockclust",
                             "-a", accept_annotations,
                             "-r", reject_annotations,
                             "-c", args.config_file,
@@ -481,7 +510,7 @@ def init():
             known_dir = os.path.join(args.output_dir, "known")
             if not os.path.exists(known_dir):
                 os.makedirs(known_dir)
-            os.system(' '.join(["BlockClust",
+            os.system(' '.join(["blockclust",
                                 "-a", accept_annotations,
                                 "-r", reject_annotations,
                                 "-c", args.config_file,
