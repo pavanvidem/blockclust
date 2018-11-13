@@ -1,3 +1,4 @@
+#!/usr/bin/python
 import argparse
 import os
 import pysam
@@ -38,9 +39,8 @@ def extract_d_mcl_clusters(outdir):
     for line in fh_annot_bbo:
         if line.startswith('>'):
             f = line.rstrip('\n').split('\t')
-            bgf = line.split('\t')
-            bg_id = bgf[0].replace('>cluster_', '>blockgroup_', 1)
-            bg_class = bgf[9]
+            bg_id = f[0].replace('>cluster_', '>blockgroup_', 1)
+            bg_class = f[9]
             bg_count += 1
             if str(bg_count) + ':' + bg_class + ':' + bg_id in d_mcl_clusters:
                 cluster_nr = d_mcl_clusters[str(bg_count) + ':' + bg_class + ':' + bg_id]
@@ -97,7 +97,7 @@ def mcl_clustering(outdir):
             fh_tab.write(str(c) + ":" + all_bga[c] + "\t" + str(n) + ":" + all_bga[n] + "\t" + i + '\n')
     fh_mtx.close()
     fh_tab.close()
-    os.system(" ".join(["Rscript plotClusters.R clust",
+    os.system(" ".join(["blockclust_plot.R clust",
                         os.path.join(outdir, "hclust_input.mtx"),
                         os.path.join(outdir, "whole_hclust.dnd"),
                         os.path.join(outdir, "blockgroup_annotations.txt"),
@@ -379,6 +379,78 @@ def filter_known_blockgroups(in_bbo, out_bbo):
     fh_out_bbo.close()
 
 
+def auc_roc(outdir):
+    d_blockgroup_class = defaultdict()
+    fh_annot_bbo = open(os.path.join(outdir, "annotated.bbo"))
+    bg_count = 0
+    for line in fh_annot_bbo:
+        if line.startswith('>'):
+            f = line.rstrip('\n').split('\t')
+            bg_class = f[9]
+            d_blockgroup_class[bg_count] = bg_class
+            bg_count += 1
+    fh_annot_bbo.close()
+
+    fh_sim = open(os.path.join(outdir, 'matrix'), 'r')
+    d_class_specific_aucs = defaultdict(list)
+    for n_row, line in enumerate(fh_sim):
+        f = line.rstrip('\n').rstrip().split()
+        row_class = d_blockgroup_class[n_row]
+        d_similarities = defaultdict(lambda: defaultdict(str))
+        for i, s in enumerate(f):
+            d_similarities[s][i] = d_blockgroup_class[i]
+
+        l_labels = []
+        l_similarities = []
+        for sim in sorted(d_similarities.keys()):
+            for n_col in d_similarities[sim].keys():
+                col_class = d_similarities[sim][n_col]
+                if row_class == col_class:
+                    l_labels.append(1)
+                else:
+                    l_labels.append(0)
+                l_similarities.append(float(sim))
+        d_class_specific_aucs[row_class].append(roc_auc_score(l_labels, l_similarities))
+    fh_sim.close()
+
+    roc_auc_sum_all = 0
+    known_blockgroups = 0
+    uknown_blockgroups = 0
+    fh_auc_roc = open(os.path.join(outdir, 'auc_roc.txt'), 'w')
+    fh_auc_roc.write('{:<20s}{:>5s}{:>12s}'.format('ncRNA class',
+                                                   'count',
+                                                   'AUC ROC') + '\n')
+    print('{:<20s}{:>5s}{:>12s}'.format('ncRNA class',
+                                        'count',
+                                        'AUC ROC'))
+    for rna_class in sorted(d_class_specific_aucs.keys()):
+        roc_auc_sum_class = 0
+        if rna_class == 'unknown':
+            uknown_blockgroups += 1
+        else:
+            for auc in d_class_specific_aucs[rna_class]:
+                roc_auc_sum_class += float(auc)
+                roc_auc_sum_all += float(auc)
+                known_blockgroups += 1
+            class_avg_roc_auc = roc_auc_sum_class/float(len(d_class_specific_aucs[rna_class]))
+            fh_auc_roc.write('{:<20s}{:>5d}{:>12.6f}'.format(rna_class,
+                                                             len(d_class_specific_aucs[rna_class]),
+                                                             class_avg_roc_auc) + '\n')
+            print('{:<20s}{:>5d}{:>12.6f}'.format(rna_class,
+                                                 len(d_class_specific_aucs[rna_class]),
+                                                 class_avg_roc_auc))
+
+    roc_auc_avg_all = roc_auc_sum_all / float(known_blockgroups)
+    fh_auc_roc.write('{:<20s}{:>5d}{:>12.6f}'.format('Average',
+                                                     known_blockgroups,
+                                                     roc_auc_avg_all) + '\n')
+    print('{:<20s}{:>5d}{:>12.6f}'.format('Average',
+                                          known_blockgroups,
+                                          roc_auc_avg_all))
+    fh_auc_roc.close()
+    return
+
+
 def init():
     parser = argparse.ArgumentParser(description='Chimeric read annotator for interactome data',
                                      usage='%(prog)s [-h] [-v,--version]',
@@ -518,9 +590,10 @@ def init():
                                 "-t", known_bbo,
                                 "-b", str(args.bit_size),
                                 "-q", "true"]))
-
             os.system("cp " + args.config_file + " " + args.output_dir)
-            print("=========================================================")
+            print("=====================================")
+            auc_roc(known_dir)
+            print("=====================================")
 
         mcl_clustering(args.output_dir)
         if args.classify:
@@ -550,7 +623,7 @@ def init():
                                             d_train_class_targets, args.config_file, args.bit_size)
                     for train_class in sorted(d_train_class_targets.keys()):
                         compute_model_based_performance(os.path.join(args.output_dir, "known"), train_class)
-        print("============= DONE ============\n")
+        print("================ DONE ===============\n")
 
     elif args.mode == "POST":
         if not args.cmsearch_out or args.clusters_bed:
@@ -608,7 +681,7 @@ def init():
                 for i in range(len(d_cluster_analysis[cluster][rna_class])):
                     fh_clust_distr.write(cluster + '\t' + rna_class + '\n')
         fh_clust_distr.close()
-        os.system(' '.join(["Rscript plotClusters.R hist ", os.path.join(args.output_dir, "cluster_distribution.txt"),
+        os.system(' '.join(["blockclust_plot.R hist ", os.path.join(args.output_dir, "cluster_distribution.txt"),
                             os.path.join(args.output_dir, "cluster_distribution.pdf")]))
 
         # select cluster representatives
@@ -648,7 +721,7 @@ def init():
         fh_out_mtx.close()
         fh_out_bga.close()
 
-        os.system(' '.join(["Rscript plotClusters.R clust ", os.path.join(args.output_dir, "cluster_candidate_sim.mtx"),
+        os.system(' '.join(["blockclust_plot.R clust ", os.path.join(args.output_dir, "cluster_candidate_sim.mtx"),
                             os.path.join(args.output_dir, "candidate_hclust.dnd"),
                             os.path.join(args.output_dir, "candidate_bg_annotations.txt"),
                             os.path.join(args.output_dir, "hclust_tree_clusters.pdf")]))

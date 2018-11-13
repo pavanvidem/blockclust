@@ -42,7 +42,7 @@ int main (int argc, char **argv){
         	testFile = optarg;
             break;
         case 'q':
-            reportAUC = true;
+            reportAUC = optarg;
             break;  
         case 'c':
             configFile = optarg;
@@ -119,20 +119,20 @@ int main (int argc, char **argv){
 	s << "EDeN -i "<< outDir <<"/discretized.gspan -f SEQUENCE -M "<<sequenceDegree<< " -b "<< bitSize << " -a MATRIX -r "<<radius<<" -d "<< distance << " -g DIRECTED -y "<<outDir<<" >> "<<outDir<<"/EDeN.log";
 	system(s.str().c_str()); //EDeN call
 	s.str("");
-    if(reportAUC){
-	    s << outDir << "/roc_measures_n_" << nrOfBins << "_r_" << radius << ".out";
-        ofstream ROC;
-	    ROC.open(s.str().c_str());
-	    if(!ROC.is_open()){
-	        cerr << "Error opening file '" << s.str() << "'!!!" << endl;
-	        exit(1);
-	    }
-	    s.str("");    
-	    s << outDir<< "/matrix";
-	    BlockClust bc;
-	    bc.aucroc(s.str().c_str(), fc.getBlockGroupClassMap(), ROC, configuration);
-	    ROC.close();
-	}
+//    if(reportAUC){
+//	    s << outDir << "/roc_measures_n_" << nrOfBins << "_r_" << radius << ".out";
+//        ofstream ROC;
+//	    ROC.open(s.str().c_str());
+//	    if(!ROC.is_open()){
+//	        cerr << "Error opening file '" << s.str() << "'!!!" << endl;
+//	        exit(1);
+//	    }
+//	    s.str("");
+//	    s << outDir<< "/matrix";
+//	    BlockClust bc;
+//	    bc.aucroc(s.str().c_str(), fc.getBlockGroupClassMap(), ROC, configuration);
+//	    ROC.close();
+//	}
     return 0;
 }
 
