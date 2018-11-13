@@ -1,4 +1,4 @@
-#!/usr/bin/env python Rscript
+#!/usr/bin/env Rscript
 args <- commandArgs(trailingOnly = TRUE)
 
 library('dendextend')
