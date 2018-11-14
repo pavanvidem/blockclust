@@ -6,5 +6,5 @@ blockclust: src/BlockClust.o src/BlockGroup.o src/Block.o src/Read.o src/BlockEd
 	${CXX} ${CXXFLAGS} -o $@ $^
 
 clean:
-    rm blockclust
+	rm blockclust
 	rm src/*.o
