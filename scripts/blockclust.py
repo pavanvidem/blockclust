@@ -505,7 +505,7 @@ def init():
                         help='Bit size')
     parser.add_argument('-rfam', '--rfam_map', action='store', dest='rfam_map',
                         default=os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))),
-                                             'blockclust_data', 'rfam_map.txt'),
+                                             'share', 'blockclust_data', 'rfam_map.txt'),
                         help='Mapping of Rfam families')
 
     parser.add_argument("-chr", '--no_chr', action='store_true',
@@ -634,7 +634,7 @@ def init():
         print("================ DONE ===============\n")
 
     elif args.mode == "POST":
-        if not args.cmsearch_out or args.clusters_bed:
+        if not args.cmsearch_out or not args.clusters_bed or not args.sim_tab:
             sys.stderr.write("options '-cs', '-cbed' are mandatory in post-processing mode")
             exit(1)
 
@@ -651,7 +651,7 @@ def init():
         d_rfam_family = {}
         fh_rfam = open(args.rfam_map)
         for line in fh_rfam:
-            f = line.rstrip('\n').split('\n')
+            f = line.rstrip('\n').split('\t')
             d_rfam_family[f[0]] = f[1]
         fh_rfam.close()
 
@@ -664,14 +664,15 @@ def init():
             if float(f[15]) > 0.000001:
                 continue
             d = f[17].split(':')
-            cluster_id = d[3]
+            cluster_id = d[-1]
+            # print(cluster_id, f[0], f[3], d_rfam_family[f[3]])
             if f[0] in d_uniq_found[cluster_id]:
                 continue
             d_cms_cluster_rfam_family[cluster_id][d_rfam_family[f[3]]] += 1
             d_uniq_found[cluster_id][f[0]] += 1
         fh_cmsearch.close()
 
-        d_cluster_analysis = {}
+        d_cluster_analysis = defaultdict(lambda: defaultdict(int))
         for cluster in sorted(d_cluster_sizes.keys()):
             cluster_size = d_cluster_sizes[cluster]
             for rfam_class in d_cms_cluster_rfam_family[cluster].keys():
@@ -680,13 +681,16 @@ def init():
             unknown_instances = cluster_size - known_instances
             d_cluster_analysis[cluster]['unknown'] = unknown_instances
 
+        if not os.path.exists(args.output_dir):
+            os.makedirs(args.output_dir)
+
         fh_clust_distr = open(os.path.join(args.output_dir, "cluster_distribution.txt"), 'w')
         fh_clust_distr.write("Clusters\tRNA_type\n")
         for cluster in sorted(d_cluster_analysis.keys()):
             for rna_class in sorted(d_cluster_analysis[cluster].keys()):
                 if d_cluster_analysis[cluster][rna_class] <= 0:
                     continue
-                for i in range(len(d_cluster_analysis[cluster][rna_class])):
+                for i in range(d_cluster_analysis[cluster][rna_class]):
                     fh_clust_distr.write(cluster + '\t' + rna_class + '\n')
         fh_clust_distr.close()
         os.system(' '.join(["blockclust_plot.r hist ", os.path.join(args.output_dir, "cluster_distribution.txt"),
@@ -708,7 +712,7 @@ def init():
             for i in entries:
                 s = 0
                 for j in entries:
-                    s += d_similarities[i + '\t' + j]
+                    s += float(d_similarities[i + '\t' + j])
                 if s > candidate_sim:
                     candidate = i
                     candidate_sim = s
