@@ -16,7 +16,7 @@ BlockClust::~BlockClust(){
 }
 
 int main (int argc, char **argv){
-	string testFile, configFile, outDir, rejectBED, acceptBED;
+    string testFile, configFile, outDir, rejectBED, acceptBED;
     unsigned short bitSize = 0;
     bool reportAUC=false;
     int index;
@@ -27,23 +27,23 @@ int main (int argc, char **argv){
     while ((c = getopt (argc, argv, "c:o:a:b:t:q:r:")) != -1)
         switch (c){
         case 'a':
-        	acceptBED = optarg;
+            acceptBED = optarg;
             break;
         case 'r':
-        	rejectBED = optarg;
+            rejectBED = optarg;
             break;
         case 'o':
-        	outDir = optarg;
+            outDir = optarg;
             break;
         case 'b':
-        	sscanf(optarg, "%hu", &bitSize);
+            sscanf(optarg, "%hu", &bitSize);
             break;
         case 't':
-        	testFile = optarg;
+            testFile = optarg;
             break;
         case 'q':
             reportAUC = optarg;
-            break;  
+            break;
         case 'c':
             configFile = optarg;
             break;
@@ -57,13 +57,14 @@ int main (int argc, char **argv){
                          "Unknown option character `\\x%x'.\n",
                          optopt);
             return 1;
-		default:
+        default:
             break;
-	}
+    }
     for (index = optind; index < argc; index++)
         printf ("Non-option argument %s\n", argv[index]);
 
     if(testFile.empty() || configFile.empty() || acceptBED.empty() || rejectBED.empty() || outDir.empty()){
+        cout << "Efficient clustering and classification of non-coding RNAs from short read RNA-seq profiles" << endl;
     	fprintf (stderr, "options '-t', '-c', '-a', '-r' and '-o' are mandatory in clustering mode\n");
     	return 1;
     }
