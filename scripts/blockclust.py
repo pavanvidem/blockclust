@@ -96,10 +96,11 @@ def mcl_clustering(outdir):
         for n, i in enumerate(f, 1):
             fh_tab.write(str(c) + ":" + all_bga[c] + "\t" + str(n) + ":" + all_bga[n] + "\t" + i + '\n')
     fh_mtx.close()
+    fh_hclust_in_mtx.close()
     fh_tab.close()
     os.system(" ".join(["blockclust_plot.r clust",
-                        os.path.join(outdir, "blockgroup_annotations.txt"),
                         os.path.join(outdir, "hclust_input.mtx"),
+                        os.path.join(outdir, "blockgroup_annotations.txt"),
                         os.path.join(outdir, "hclust_tree.pdf")]))
     # MCL clustering
     os.system(" ".join(["mcl",
@@ -124,7 +125,7 @@ def write_train_test_targets(outdir, model_dir):
                         '>', os.path.join(outdir, 'input.blockgroup_annotations.txt')]))
 
     train_size = len(open(os.path.join(model_dir, 'blockgroup_annotations.txt')).readlines())
-    fh_bga = open(os.path.join(outdir, 'input.blockgroup_annotations.txt'))
+    fh_all_bga = open(os.path.join(outdir, 'input.blockgroup_annotations.txt'))
     fh_all_target = open(os.path.join(outdir, 'input.target'), 'w')
     fh_train_target = open(os.path.join(outdir, 'train.target'), 'w')
     fh_train_ids = open(os.path.join(outdir, 'train.ids'), 'w')
@@ -133,27 +134,29 @@ def write_train_test_targets(outdir, model_dir):
 
     tgt_id_count = 1
     d_train_class_targets = {}
-    d_class_targets = {}
-    for c, line in enumerate(fh_bga, 1):
+    d_test_class_targets = {}
+    d_all_class_targets = {}
+    for c, line in enumerate(fh_all_bga, 1):
         bg_class = line.rstrip('\n').split('\t')[1]
-        if bg_class not in d_class_targets:
-            d_class_targets[bg_class] = str(tgt_id_count)
+        if bg_class not in d_all_class_targets:
+            d_all_class_targets[bg_class] = str(tgt_id_count)
             tgt_id_count += 1
-        fh_all_target.write(d_class_targets[bg_class] + '\n')
+        fh_all_target.write(d_all_class_targets[bg_class] + '\n')
         if c <= train_size:
-            fh_train_target.write(d_class_targets[bg_class] + '\n')
-            d_train_class_targets[bg_class] = d_class_targets[bg_class]
+            fh_train_target.write(d_all_class_targets[bg_class] + '\n')
             fh_train_ids.write(str(c-1) + '\n')
+            d_train_class_targets[bg_class] = d_all_class_targets[bg_class]
         else:
-            fh_test_target.write(d_class_targets[bg_class] + '\n')
+            fh_test_target.write(d_all_class_targets[bg_class] + '\n')
             fh_test_ids.write(str(c-1) + '\n')
-    fh_bga.close()
+            d_test_class_targets[bg_class] = d_all_class_targets[bg_class]
+    fh_all_bga.close()
     fh_all_target.close()
     fh_train_target.close()
     fh_train_ids.close()
     fh_test_target.close()
     fh_test_ids.close()
-    return d_class_targets, d_train_class_targets
+    return d_test_class_targets, d_train_class_targets
 
 
 def extract_eden_parameters(config_file):
@@ -189,7 +192,7 @@ def write_predictions(outdir, file, d_predictions):
     return
 
 
-def nearest_neighbour_predictions(outdir, d_class_targets, config_file, bit_size):
+def nearest_neighbour_predictions(outdir, d_test_class_targets, config_file, bit_size):
     sequence_degree, radius, distance = extract_eden_parameters(config_file)
     os.system(' '.join(["EDeN", "-g DIRECTED", "-b", str(bit_size),
                         "-t", os.path.join(outdir, "input.target"),
@@ -200,7 +203,7 @@ def nearest_neighbour_predictions(outdir, d_class_targets, config_file, bit_size
                         "-f SEQUENCE", "-r", radius, "-d", distance, "-M", sequence_degree, "-x 3", "-y", outdir,
                         ">>", os.path.join(outdir, "EDeN.log")]))
 
-    d_target_class = {v: k for k, v in d_class_targets.iteritems()}
+    d_target_class = {v: k for k, v in d_test_class_targets.items()}
 
     d_nn_predictions = {}
     fh_knn = open(os.path.join(outdir, "knn_target_value"))
@@ -606,18 +609,18 @@ def init():
         mcl_clustering(args.output_dir)
         if args.classify:
             print("Performing classification")
-            d_class_targets, d_train_class_targets = write_train_test_targets(args.output_dir, args.model_dir)
+            d_test_class_targets, d_train_class_targets = write_train_test_targets(args.output_dir, args.model_dir)
             if args.classification_mode == 'NEAREST':
                 print("NEAREST NEIGHBOR PREDICTION")
-                nearest_neighbour_predictions(args.output_dir, d_class_targets, args.config_file, args.bit_size)
+                nearest_neighbour_predictions(args.output_dir, d_test_class_targets, args.config_file, args.bit_size)
                 if contain_known_ncrnas:
-                    d_class_targets, d_train_class_targets = write_train_test_targets(
+                    d_test_class_targets, d_train_class_targets = write_train_test_targets(
                         os.path.join(args.output_dir, "known"), args.model_dir)
-                    nearest_neighbour_predictions(os.path.join(args.output_dir, "known"), d_class_targets,
+                    nearest_neighbour_predictions(os.path.join(args.output_dir, "known"), d_test_class_targets,
                                                   args.config_file, args.bit_size)
-                    for train_class in sorted(d_train_class_targets.keys()):
+                    for test_rna_class in sorted(d_test_class_targets.keys()):
                         compute_nn_performance(os.path.join(args.output_dir, "known"),
-                                               train_class, d_train_class_targets[train_class])
+                                               test_rna_class, d_test_class_targets[test_rna_class])
             elif args.classification_mode == 'MODEL':
                 print("MODEL BASED PREDICTION")
                 model_based_predictions(args.output_dir, args.model_dir,
@@ -625,12 +628,12 @@ def init():
                 if contain_known_ncrnas:
                     if not os.path.exists(os.path.join(args.output_dir, "known")):
                         os.makedirs((os.path.join(args.output_dir, "known")))
-                    d_class_targets, d_train_class_targets = write_train_test_targets(
+                    d_test_class_targets, d_train_class_targets = write_train_test_targets(
                         os.path.join(args.output_dir, "known"), args.model_dir)
                     model_based_predictions(os.path.join(args.output_dir, "known"), args.model_dir,
                                             d_train_class_targets, args.config_file, args.bit_size)
-                    for train_class in sorted(d_train_class_targets.keys()):
-                        compute_model_based_performance(os.path.join(args.output_dir, "known"), train_class)
+                    for test_rna_class in sorted(d_test_class_targets.keys()):
+                        compute_model_based_performance(os.path.join(args.output_dir, "known"), test_rna_class)
         print("================ DONE ===============\n")
 
     elif args.mode == "POST":

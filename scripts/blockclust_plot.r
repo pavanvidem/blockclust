@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 args <- commandArgs(trailingOnly = TRUE)
 
-library('dendextend')
+suppressPackageStartupMessages(library(dendextend))
 
 if(args[1]=="clust"){
     mydata<-read.table(args[2], sep=" ", header=FALSE, row.names=1) #"hclust_input.mtx"
@@ -26,8 +26,6 @@ if(args[1]=="clust"){
     print(length(unique(mydat$RNA_type)))
     p<-qplot(Clusters, data=mydat, geom="bar", fill=factor(RNA_type))+theme(axis.text.x = element_text(angle = 90, hjust = 1))+scale_fill_manual(values=cols)
     ggsave(args[3], p, width=15, height=10)
-#    ggplot(mydat, aes(Clusters, fill=RNA_type)) + geom_bar() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
-#    dev.off()
 }else{
     write("Undefined plotting mode!", stderr())
 }
