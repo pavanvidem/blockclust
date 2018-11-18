@@ -21,8 +21,9 @@ def add_chr(old_annotations, new_annotations):
 
 def extract_d_mcl_clusters(outdir):
     d_mcl_clusters = {}
+    print("Ignoring clusters with less than 3 blockgroups")
     fh_mcl = open(os.path.join(outdir, "mcl.out"))
-    for n, line in enumerate(fh_mcl):
+    for n, line in enumerate(fh_mcl, 1):
         f = line.rstrip('\n').split('\t')
         if len(f) < 3:
             continue
@@ -39,7 +40,7 @@ def extract_d_mcl_clusters(outdir):
     for line in fh_annot_bbo:
         if line.startswith('>'):
             f = line.rstrip('\n').split('\t')
-            bg_id = f[0].replace('>cluster_', '>blockgroup_', 1)
+            bg_id = f[0].replace('>cluster_', 'blockgroup_', 1)
             bg_class = f[9]
             bg_count += 1
             if str(bg_count) + ':' + bg_class + ':' + bg_id in d_mcl_clusters:
@@ -54,7 +55,7 @@ def extract_d_mcl_clusters(outdir):
             else:
                 cluster_nr = ""
         elif cluster_nr != "":
-            d_bedlines[cluster_nr].append(line)
+            d_blockgoups[cluster_nr].append(line)
     fh_annot_bbo.close()
 
     mcl_dir = os.path.join(outdir, "mcl_clusters")
@@ -70,6 +71,7 @@ def extract_d_mcl_clusters(outdir):
         fh_cluster_bed = open(os.path.join(mcl_dir, 'cluster_' + blockgroup + '.bed'), 'w')
         for bed in d_bedlines[blockgroup]:
             fh_cluster_bed.write(bed + '\n')
+            fh_all_clusters_bed.write(bed + '\n')
         fh_cluster_bed.close()
     fh_all_clusters_bed.close()
     return
@@ -192,7 +194,7 @@ def write_predictions(outdir, file, d_predictions):
     return
 
 
-def nearest_neighbour_predictions(outdir, d_test_class_targets, config_file, bit_size):
+def nearest_neighbour_predictions(outdir, d_class_targets, config_file, bit_size):
     sequence_degree, radius, distance = extract_eden_parameters(config_file)
     os.system(' '.join(["EDeN", "-g DIRECTED", "-b", str(bit_size),
                         "-t", os.path.join(outdir, "input.target"),
@@ -203,19 +205,24 @@ def nearest_neighbour_predictions(outdir, d_test_class_targets, config_file, bit
                         "-f SEQUENCE", "-r", radius, "-d", distance, "-M", sequence_degree, "-x 3", "-y", outdir,
                         ">>", os.path.join(outdir, "EDeN.log")]))
 
-    d_target_class = {v: k for k, v in d_test_class_targets.items()}
-
+    d_target_class = {v: k for k, v in d_class_targets.items()}
+    d_bga = map_blockgroup_annotations(outdir)
+    
     d_nn_predictions = {}
     fh_knn = open(os.path.join(outdir, "knn_target_value"))
     for c, line in enumerate(fh_knn, 1):
-        d_targets = defaultdict(int)
-        f = line.rstrip('\n').split()
-        for target in f[1:]:
-            d_targets[target] += 1
-        for target in d_targets.keys():
-            if d_targets[target]/float(len(f)) > 0.5:
-                d_nn_predictions[c] = d_target_class[target]
-
+        # predict if it is unknown
+        if d_bga[c].split(':')[0] == 'unknown':
+            d_targets = defaultdict(int)
+            f = line.rstrip('\n').rstrip().split()
+            del f[0]
+            for target in f:
+                d_targets[target] += 1
+            for target in d_targets.keys():
+                if d_targets[target]/float(len(f)) > 0.5:
+                    d_nn_predictions[c] = 'predicted_' + d_target_class[target]
+        else:
+            d_nn_predictions[c] = d_bga[c].split(':')[0]
         if c not in d_nn_predictions:
             d_nn_predictions[c] = 'unknown'
     fh_knn.close()
@@ -612,11 +619,11 @@ def init():
             d_test_class_targets, d_train_class_targets = write_train_test_targets(args.output_dir, args.model_dir)
             if args.classification_mode == 'NEAREST':
                 print("NEAREST NEIGHBOR PREDICTION")
-                nearest_neighbour_predictions(args.output_dir, d_test_class_targets, args.config_file, args.bit_size)
+                nearest_neighbour_predictions(args.output_dir, d_train_class_targets, args.config_file, args.bit_size)
                 if contain_known_ncrnas:
                     d_test_class_targets, d_train_class_targets = write_train_test_targets(
                         os.path.join(args.output_dir, "known"), args.model_dir)
-                    nearest_neighbour_predictions(os.path.join(args.output_dir, "known"), d_test_class_targets,
+                    nearest_neighbour_predictions(os.path.join(args.output_dir, "known"), d_train_class_targets,
                                                   args.config_file, args.bit_size)
                     for test_rna_class in sorted(d_test_class_targets.keys()):
                         compute_nn_performance(os.path.join(args.output_dir, "known"),
