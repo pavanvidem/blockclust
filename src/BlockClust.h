@@ -22,7 +22,6 @@ class BlockClust{
 public:
 	BlockClust();
 	virtual ~BlockClust();
-	void aucroc(const char* similarityMatrix, map <int, string> blockGroupClassMap, ofstream &ROC, string config);
 	vector<string> split(const string& delim, const string& str);
 private:
 };

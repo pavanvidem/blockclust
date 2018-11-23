@@ -103,7 +103,6 @@ double Block::noOfMultiMapped(){
 	vector<Read>::iterator readIterator;
 	for ( readIterator = readsList.begin(); readIterator != readsList.end(); ++readIterator ){
 		double noOfMappings = readIterator->getNumberOfMappings();
-		double readCount = readIterator->getReadCount();
 		if(noOfMappings > 1)
 			multiMapped ++;	
 	}

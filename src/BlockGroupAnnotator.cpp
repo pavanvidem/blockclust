@@ -89,7 +89,7 @@ void BlockGroupAnnotator::parseBlockbusterOut(string bboFile){
 	unsigned int  blockGroupId,  readCount, blockCount;
 	unsigned long  blockGroupStart, blockGroupEnd;
 	double blockGroupExpression;
-	short blockGroupLength;
+	short blockGroupLength = 0;
 	while(!BBO.eof()){
 		getline(BBO, LINE);
 		if(LINE == "")
@@ -197,8 +197,6 @@ void BlockGroupAnnotator::parseBlockbusterOut(string bboFile){
 					char annotationChrom[50], annoationStrand[5];
 					unsigned long annotationStart, annotationEnd;
 					sscanf(mapIterator->first.c_str(), "%s\t%lu\t%lu\t%s", annotationChrom, &annotationStart, &annotationEnd, annoationStrand);
-					long overlapStart = 0;
-					long overlapEnd = 0;
 					if(!strcmp(annotationChrom,blockGroupChrom)){
 						if((annotationStart < blockGroupStart && blockGroupStart < annotationEnd) || (blockGroupStart < annotationStart && annotationStart < blockGroupEnd)){
 							numberOfOverlaps++;
@@ -238,7 +236,6 @@ float BlockGroupAnnotator::overlapAvg(string overlapRatios){
 }
 
 void BlockGroupAnnotator::writeAnnotatedBlockGroups(string outFile){
-	unsigned int knownBlockGroups = 0;
 	ofstream OUT;
 	OUT.open(outFile.c_str());
 	if(!OUT.is_open()){
@@ -271,7 +268,7 @@ void BlockGroupAnnotator::writeAnnotatedBlockGroups(string outFile){
 			OUT << "\t" << family << "\t" << it2->second << endl;
 		}
 		reads = blockGroupReadsMap.find(it1->first)->second;
-		for(long r=0; r<reads.size(); r++)
+		for(unsigned int r=0; r<reads.size(); r++)
 			OUT << reads[r] << endl;
 		reads.clear();
 	}
@@ -286,7 +283,6 @@ vector<string> BlockGroupAnnotator::split(const string& delim, const string& str
     size_t match_pos;
     size_t substr_length;
     vector<string> result;
-    int index = 0;
     while((match_pos = str.find(delim, start_pos)) != string::npos){
     	substr_length = match_pos - start_pos;
         if (substr_length > 0){

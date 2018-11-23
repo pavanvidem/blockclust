@@ -217,8 +217,8 @@ void FeatureComputer::computeBinBoundaries(unsigned short nrOfBins, string bbFil
 				double featValue = (blocks[b].*(bb->second))();
 				featureVales.push_back(featValue);
 			}
-			sort(featureVales);
 		}
+        sort(featureVales);
 		BB << ">" << bb->first << endl;
 		writeBounds(nrOfBins, nrOfBins, -INFINITY, featureVales, BB);
 	}
@@ -231,8 +231,8 @@ void FeatureComputer::computeBinBoundaries(unsigned short nrOfBins, string bbFil
 				double featValue = (blockEdges[e].*(ee->second))();
 				featureVales.push_back(featValue);
 			}
-			sort(featureVales);
 		}
+        sort(featureVales);
 		BB << ">" << ee->first << endl;
 		writeBounds(nrOfBins, nrOfBins, -INFINITY, featureVales, BB);
 	}
@@ -297,7 +297,7 @@ vector<string> FeatureComputer::getBinBoundaries(string feat){
 /////////////////////////////////////////////
 
 string FeatureComputer::discretize(vector<string> binBoundaries, double non_discretized){
-	int discretized;
+	int discretized = 0;
 	int binCount = 1;
 	for (unsigned int i=0; i< binBoundaries.size(); i++){
 		double start_f, end_f;
@@ -322,6 +322,10 @@ string FeatureComputer::discretize(vector<string> binBoundaries, double non_disc
 			}
 		}
 		binCount++;
+	}
+	if (discretized == 0){
+	    cerr << "\nNo feature discretization bins found in the config file!\n";
+	    exit(1);
 	}
 	stringstream d;
 	d << discretized;

@@ -7,6 +7,7 @@
 
 #include "BlockClust.h"
 #include <iostream>
+#include <getopt.h>
 using namespace std;
 
 BlockClust::BlockClust(){
@@ -15,62 +16,83 @@ BlockClust::BlockClust(){
 BlockClust::~BlockClust(){
 }
 
-int main (int argc, char **argv){
-    string testFile, configFile, outDir, rejectBED, acceptBED;
-    unsigned short bitSize = 0;
-    bool reportAUC=false;
-    int index;
-    int c;
+void print_usage() {
+    printf("Efficient clustering and classification of non-coding RNAs from short read RNA-seq profiles\n");
+    printf("-------------------------------------------------------------------------------------------\n");
+    std::cout <<
+        "Usage: blockclust \n"
+            "       -i, --in       [blockbuster output]\n"
+            "       -a, --accept   [accept annotations]\n"
+            "       -r, --reject   [reject annotations]\n"
+            "       -c, --config   [config file]\n"
+            "       -o, --out      [output dir]\n"
+            "       -b, --bit      [bit size]\n"
+            "       --help     Show help\n";
+    exit(1);
+}
 
-    opterr = 0;
+int main (int argc, char* argv[]){
+    int opt = 0;
+    string bboFile, configFile, acceptBED, rejectBED, outDir;
+    unsigned short bitSize = 15;
+    int index = 0;
 
-    while ((c = getopt (argc, argv, "c:o:a:b:t:q:r:")) != -1)
-        switch (c){
-        case 'a':
-            acceptBED = optarg;
-            break;
-        case 'r':
-            rejectBED = optarg;
-            break;
-        case 'o':
-            outDir = optarg;
-            break;
-        case 'b':
-            sscanf(optarg, "%hu", &bitSize);
-            break;
-        case 't':
-            testFile = optarg;
-            break;
-        case 'q':
-            reportAUC = optarg;
-            break;
-        case 'c':
-            configFile = optarg;
-            break;
-        case '?':
-            if (optopt == 'c')
-                fprintf (stderr, "Option -%c requires an argument.\n", optopt);
-            else if (isprint (optopt))
-                fprintf (stderr, "Unknown option `-%c'.\n", optopt);
-            else
-                fprintf (stderr,
-                         "Unknown option character `\\x%x'.\n",
-                         optopt);
-            return 1;
-        default:
-            break;
+    static struct option long_options[] = {
+        {"in",      required_argument,  0,  'i' },
+        {"accept",  required_argument,  0,  'a' },
+        {"reject",  required_argument,  0,  'r' },
+        {"config",  required_argument,  0,  'c' },
+        {"out",     required_argument,  0,  'o' },
+        {"bit",     optional_argument,  0,  'b' },
+        {"help",    no_argument,        0,  'h' },
+        {0,         0,                  0,  0   }
+    };
+
+    while ((opt = getopt_long(argc, argv, "a:b:c:h:i:o:r:",
+                   long_options, &index )) != -1) {
+        switch (opt) {
+            case 'a':
+                acceptBED = optarg;
+                break;
+            case 'r':
+                rejectBED = optarg;
+                break;
+            case 'o':
+                outDir = optarg;
+                break;
+            case 'b':
+                sscanf(optarg, "%hu", &bitSize);
+                break;
+            case 'i':
+                bboFile = optarg;
+                break;
+            case 'c':
+                configFile = optarg;
+                break;
+            case '?':
+            case 'h':
+            default:
+                print_usage();
+                break;
+        }
     }
-    for (index = optind; index < argc; index++)
-        printf ("Non-option argument %s\n", argv[index]);
 
-    if(testFile.empty() || configFile.empty() || acceptBED.empty() || rejectBED.empty() || outDir.empty()){
-        cout << "Efficient clustering and classification of non-coding RNAs from short read RNA-seq profiles" << endl;
-    	fprintf (stderr, "options '-t', '-c', '-a', '-r' and '-o' are mandatory in clustering mode\n");
-    	return 1;
+    if (argc == 1)
+        print_usage();
+
+    for (index = optind; index < argc; index++){
+        printf ("Non-option argument %s\n", argv[index]);
+        exit(1);
+    }
+
+     if (bboFile.empty() || configFile.empty() || acceptBED.empty() || rejectBED.empty() || outDir.empty()){
+    	cerr << "options '-i', '-c', '-a', '-r' and '-o' are mandatory in ANALYSIS mode" << endl;
+        cerr << "Use blockclust --help for more information" << endl;
+    	exit(1);
     }
 
     printf ("Blockbuster output	: %s\nConfiguration		: %s\nAccept annotations	: %s\nReject annotations	: %s\nOutput directory	: %s\n\n",
-    		testFile.c_str(), configFile.c_str(), acceptBED.c_str(), rejectBED.c_str(), outDir.c_str());
+    		bboFile.c_str(), configFile.c_str(), acceptBED.c_str(), rejectBED.c_str(), outDir.c_str());
 
     unsigned short nrOfBins = 0, radius = 0;
     char blockGroupFeatures[20] = "";
@@ -105,7 +127,7 @@ int main (int argc, char **argv){
     unsigned short sequenceDegree = count + 2;
     unsigned short distance = 2*radius+1;
     BlockGroupAnnotator ba;
-    string annotatedBBOFile = ba.annotateBlockGroups(acceptBED, rejectBED, testFile, outDir);
+    string annotatedBBOFile = ba.annotateBlockGroups(acceptBED, rejectBED, bboFile, outDir);
     FeatureComputer fc;
     fc.init(annotatedBBOFile,configFile,outDir,nrOfBins);
     GspanCreator gc;
@@ -120,150 +142,9 @@ int main (int argc, char **argv){
 	s << "EDeN -i "<< outDir <<"/discretized.gspan -f SEQUENCE -M "<<sequenceDegree<< " -b "<< bitSize << " -a MATRIX -r "<<radius<<" -d "<< distance << " -g DIRECTED -y "<<outDir<<" >> "<<outDir<<"/EDeN.log";
 	system(s.str().c_str()); //EDeN call
 	s.str("");
-//    if(reportAUC){
-//	    s << outDir << "/roc_measures_n_" << nrOfBins << "_r_" << radius << ".out";
-//        ofstream ROC;
-//	    ROC.open(s.str().c_str());
-//	    if(!ROC.is_open()){
-//	        cerr << "Error opening file '" << s.str() << "'!!!" << endl;
-//	        exit(1);
-//	    }
-//	    s.str("");
-//	    s << outDir<< "/matrix";
-//	    BlockClust bc;
-//	    bc.aucroc(s.str().c_str(), fc.getBlockGroupClassMap(), ROC, configuration);
-//	    ROC.close();
-//	}
     return 0;
 }
 
-
-/////////////////////////////////////////////
-
-void BlockClust::aucroc(const char* similarityMatrix, map<int, string> blockGroupClassMap, ofstream &ROC, string config){
-	ifstream SIM;
-	SIM.open (similarityMatrix);
-	if(!SIM.is_open()){
-	    cerr << "Error opening file '" << similarityMatrix << "'!!!" << endl;
-	    exit(1);
-	}
-	int count=1;
-
-	map <string, vector<float> > classSpecificAUCs;
-	string LINE;
-	ofstream TEMP;
-	while(!SIM.eof()){
-		getline(SIM, LINE);
-		if(LINE == "")
-			continue;
-		vector<string> fields = split(" ", LINE);
-		string rowClass = blockGroupClassMap.find(count)->second;
-		stringstream scount;
-		scount << ":" << count;
-		size_t f = rowClass.find(scount.str());
-		while(f != string::npos){
-			rowClass.replace(f, rowClass.length(), "");
-			f = rowClass.find(scount.str());
-		}
-	    map<float, map<int, string> > similaritiesMap;
-		for(unsigned int i=0; i<fields.size(); i++){
-			similaritiesMap[atof(fields[i].c_str())][i] = blockGroupClassMap.find(i+1)->second;
-		}
-		scount.str("");
-		map<float, map<int, string> >::iterator it1;
-		map<int, string>::iterator it2;
-		string similarities = "";
-		for(it1 = similaritiesMap.begin(); it1 != similaritiesMap.end(); ++it1){
-			int cnt = 1;
-			stringstream sim;
-			sim << it1->first;
-			for(it2 = it1->second.begin(); it2 != it1->second.end(); ++it2){
-				string fieldClass = it2->second;
-				size_t f = fieldClass.find(":");
-				while(f != string::npos){
-					fieldClass.replace(f, fieldClass.length(), "");
-					f = fieldClass.find(":");
-				}
-				if(fieldClass == rowClass){
-					similarities.append("1").append(" ").append(sim.str()).append("\n");
-				}
-				else{
-					similarities.append("0").append(" ").append(sim.str()).append("\n");
-				}
-			}
-		    cnt++;
-			sim.clear();
-		}
-		stringstream temp;
-		temp << similarityMatrix <<"."<< count << ".rocin";
-		TEMP.open(temp.str().c_str());
-		if(!TEMP.is_open()){
-		    cerr << "Error opening file '" << temp.str().c_str() << "'!!!" << endl;
-		    exit(1);
-		}
-		TEMP << similarities;
-		TEMP.close();
-		stringstream cmd;
-		cmd << "perf -ROC < " << temp.str().c_str();
-	    FILE* pipe = popen(cmd.str().c_str(), "r");
-	    if (!pipe) fprintf (stderr, "ERROR");
-	    char buffer[128];
-	    std::string result = "";
-	    while(!feof(pipe)){
-	    	if(fgets(buffer, 128, pipe) != NULL)
-	    		result += buffer;
-	    }
-	    pclose(pipe);
-	    cmd.str("");
-	    cmd << "rm " << temp.str().c_str();
-	    system(cmd.str().c_str());
-	    cmd.str("");
-	    temp.str("");
-	    float aucroc;
-	    sscanf(result.c_str(), "ROC\t%f\n", &aucroc);
-	    classSpecificAUCs[rowClass].push_back(aucroc);
-		count++;
-	}
-	SIM.close();
-
-	float allClassAUCsum = 0;
-	map<string, vector<float> >::iterator it;
-	unsigned int knownBGCount = 0;
-	unsigned int unknownBGCount = 0;
-
-	ROC << "ncRNA class" << "\t" << "Nr. of ncRNAs" << "\tAUC ROC" << endl;
-	cout << "ncRNA class" << "\t" << "Nr. of ncRNAs" << "\tAUC ROC" << endl;
-	
-	for(it = classSpecificAUCs.begin(); it != classSpecificAUCs.end(); ++it){
-	    float classAUCSum = 0;
-		string annotation = it->first;
-        if(annotation != "unknown"){
-		    for (unsigned int i=0; i<it->second.size(); i++){
-			    classAUCSum += it->second[i];
-			    allClassAUCsum += it->second[i];
-			    knownBGCount++;
-		    }
-		    float classSpecificAvgAUC = classAUCSum/it->second.size();
-		    ROC << annotation << "\t\t" << it->second.size() << "\t\t" << classSpecificAvgAUC << endl;
-		    cout << annotation << "\t\t" << it->second.size() << "\t\t" << classSpecificAvgAUC << endl;
-		}
-		else{
-		    for (unsigned int i=0; i<it->second.size(); i++){
-    		    unknownBGCount++;
-		    }
-		}
-	}
-	
-	float allClassAvgAUC = allClassAUCsum/knownBGCount;
-
-	ROC << "Average\t\t" << knownBGCount << "\t\t" << allClassAvgAUC << endl;
-	cout << "Average\t\t" << knownBGCount << "\t\t" << allClassAvgAUC << endl;
-    cout << endl;
-
-//    cout << "unknown" << "\t" << unknownBGCount << endl;
-	classSpecificAUCs.clear();
-	return;
-}
 
 /////////////////////////////////////////////
 
