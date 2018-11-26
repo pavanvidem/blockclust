@@ -26,7 +26,6 @@ void print_usage() {
             "       -r, --reject   [reject annotations]\n"
             "       -c, --config   [config file]\n"
             "       -o, --out      [output dir]\n"
-            "       -b, --bit      [bit size]\n"
             "       --help     Show help\n";
     exit(1);
 }
@@ -34,7 +33,6 @@ void print_usage() {
 int main (int argc, char* argv[]){
     int opt = 0;
     string bboFile, configFile, acceptBED, rejectBED, outDir;
-    unsigned short bitSize = 15;
     int index = 0;
 
     static struct option long_options[] = {
@@ -43,12 +41,11 @@ int main (int argc, char* argv[]){
         {"reject",  required_argument,  0,  'r' },
         {"config",  required_argument,  0,  'c' },
         {"out",     required_argument,  0,  'o' },
-        {"bit",     optional_argument,  0,  'b' },
         {"help",    no_argument,        0,  'h' },
         {0,         0,                  0,  0   }
     };
 
-    while ((opt = getopt_long(argc, argv, "a:b:c:h:i:o:r:",
+    while ((opt = getopt_long(argc, argv, "a:c:h:i:o:r:",
                    long_options, &index )) != -1) {
         switch (opt) {
             case 'a':
@@ -59,9 +56,6 @@ int main (int argc, char* argv[]){
                 break;
             case 'o':
                 outDir = optarg;
-                break;
-            case 'b':
-                sscanf(optarg, "%hu", &bitSize);
                 break;
             case 'i':
                 bboFile = optarg;
@@ -138,8 +132,8 @@ int main (int argc, char* argv[]){
 
 	s.str("");
 	distance = 2*radius+1;
-	cout << "Radius: " << radius << "\n" << "Distance: " << distance << "\n" << "Bit size: "<< bitSize << endl;
-	s << "EDeN -i "<< outDir <<"/discretized.gspan -f SEQUENCE -M "<<sequenceDegree<< " -b "<< bitSize << " -a MATRIX -r "<<radius<<" -d "<< distance << " -g DIRECTED -y "<<outDir<<" >> "<<outDir<<"/EDeN.log";
+	cout << "Radius: " << radius << "\n" << "Distance: " << distance << endl;
+	s << "EDeN -i "<< outDir <<"/discretized.gspan -f SEQUENCE -M "<<sequenceDegree<< " -b 15 -a MATRIX -r "<<radius<<" -d "<< distance << " -g DIRECTED -y "<<outDir<<" >> "<<outDir<<"/EDeN.log";
 	system(s.str().c_str()); //EDeN call
 	s.str("");
     return 0;

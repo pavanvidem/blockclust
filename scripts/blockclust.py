@@ -194,9 +194,9 @@ def write_predictions(outdir, file, d_predictions):
     return
 
 
-def nearest_neighbour_predictions(outdir, d_class_targets, config_file, bit_size):
+def nearest_neighbour_predictions(outdir, d_class_targets, config_file):
     sequence_degree, radius, distance = extract_eden_parameters(config_file)
-    os.system(' '.join(["EDeN", "-g DIRECTED", "-b", str(bit_size),
+    os.system(' '.join(["EDeN", "-g DIRECTED", "-b 15",
                         "-t", os.path.join(outdir, "input.target"),
                         "-A", os.path.join(outdir, "test.ids"),
                         "-B", os.path.join(outdir, "train.ids"),
@@ -308,7 +308,7 @@ def map_blockgroup_annotations(outdir):
     return d_bga
 
 
-def model_based_predictions(outdir, model_dir, d_rna_class_targets, config_file, bit_size):
+def model_based_predictions(outdir, model_dir, d_rna_class_targets, config_file):
     d_temp_predictions = defaultdict(list)
     for rna_class in sorted(d_rna_class_targets.keys()):
         write_class_targets(rna_class, d_rna_class_targets[rna_class], "train", outdir)
@@ -316,7 +316,7 @@ def model_based_predictions(outdir, model_dir, d_rna_class_targets, config_file,
         sequence_degree, radius, distance = extract_eden_parameters(config_file)
         os.system(' '.join(["cp", os.path.join(outdir, "discretized.gspan"),
                            os.path.join(outdir, rna_class, "discretized.gspan")]))
-        os.system(' '.join(["EDeN", "-g DIRECTED", "-b", str(bit_size),
+        os.system(' '.join(["EDeN", "-g DIRECTED", "-b 15",
                             "-i", os.path.join(outdir, rna_class, "discretized.gspan"),
                             "-f SEQUENCE", "-M", sequence_degree, "-r", radius, "-d", distance, "-a TEST",
                             "-m", os.path.join(model_dir, rna_class + ".model"),
@@ -511,8 +511,6 @@ def init():
                         help='BED file of tags')
     parser.add_argument('-tab', '--sim_tab', action='store', dest='sim_tab',
                         help='Tabular file of pairwise blockgroup similarities')
-    parser.add_argument('-b', '--bit_size', action='store', type=int, default=15, dest='bit_size',
-                        help='Bit size')
     parser.add_argument('-rfam', '--rfam_map', action='store', dest='rfam_map',
                         default=os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))),
                                              'share', 'blockclust_data', 'rfam_map.txt'),
@@ -584,12 +582,11 @@ def init():
 
         # blockClust call
         os.system(' '.join(["blockclust",
-                            "-a", accept_annotations,
-                            "-r", reject_annotations,
-                            "-c", args.config_file,
-                            "-o", args.output_dir,
-                            "-t", args.test_input,
-                            "-b", str(args.bit_size)]))
+                            "--accept", accept_annotations,
+                            "--reject", reject_annotations,
+                            "--config", args.config_file,
+                            "--out", args.output_dir,
+                            "--in", args.test_input]))
 
         known_bbo = os.path.join(args.output_dir, "annotated.known.bbo")
         filter_known_blockgroups(os.path.join(args.output_dir, "annotated.bbo"), known_bbo)
@@ -601,13 +598,11 @@ def init():
             if not os.path.exists(known_dir):
                 os.makedirs(known_dir)
             os.system(' '.join(["blockclust",
-                                "-a", accept_annotations,
-                                "-r", reject_annotations,
-                                "-c", args.config_file,
-                                "-o", known_dir,
-                                "-t", known_bbo,
-                                "-b", str(args.bit_size),
-                                "-q", "true"]))
+                                "--accept", accept_annotations,
+                                "--reject", reject_annotations,
+                                "--config", args.config_file,
+                                "--out", known_dir,
+                                "--in", known_bbo]))
             os.system("cp " + args.config_file + " " + args.output_dir)
             print("=====================================")
             auc_roc(known_dir)
@@ -619,26 +614,26 @@ def init():
             d_test_class_targets, d_train_class_targets = write_train_test_targets(args.output_dir, args.model_dir)
             if args.classification_mode == 'NEAREST':
                 print("NEAREST NEIGHBOR PREDICTION")
-                nearest_neighbour_predictions(args.output_dir, d_train_class_targets, args.config_file, args.bit_size)
+                nearest_neighbour_predictions(args.output_dir, d_train_class_targets, args.config_file)
                 if contain_known_ncrnas:
                     d_test_class_targets, d_train_class_targets = write_train_test_targets(
                         os.path.join(args.output_dir, "known"), args.model_dir)
                     nearest_neighbour_predictions(os.path.join(args.output_dir, "known"), d_train_class_targets,
-                                                  args.config_file, args.bit_size)
+                                                  args.config_file)
                     for test_rna_class in sorted(d_test_class_targets.keys()):
                         compute_nn_performance(os.path.join(args.output_dir, "known"),
                                                test_rna_class, d_test_class_targets[test_rna_class])
             elif args.classification_mode == 'MODEL':
                 print("MODEL BASED PREDICTION")
                 model_based_predictions(args.output_dir, args.model_dir,
-                                        d_train_class_targets, args.config_file, args.bit_size)
+                                        d_train_class_targets, args.config_file)
                 if contain_known_ncrnas:
                     if not os.path.exists(os.path.join(args.output_dir, "known")):
                         os.makedirs((os.path.join(args.output_dir, "known")))
                     d_test_class_targets, d_train_class_targets = write_train_test_targets(
                         os.path.join(args.output_dir, "known"), args.model_dir)
                     model_based_predictions(os.path.join(args.output_dir, "known"), args.model_dir,
-                                            d_train_class_targets, args.config_file, args.bit_size)
+                                            d_train_class_targets, args.config_file)
                     for test_rna_class in sorted(d_test_class_targets.keys()):
                         compute_model_based_performance(os.path.join(args.output_dir, "known"), test_rna_class)
         print("================ DONE ===============\n")
